@@ -13,9 +13,9 @@ This document records the AI-assisted engineering workflow, reconstructed from v
 
 ---
 
-## 2. Reconstructed Prompts (from Engineering Transcripts)
+## 2. Reconstructed Prompts (High-Level Summaries)
 
-The following prompts represent actual instructions provided during the phased development process, reconstructed verbatim from the project session trajectory:
+The prompts below are high-level reconstructed summaries representing the technical instructions and constraints provided during each development phase, rather than raw verbatim terminal transcripts:
 
 ### Prompt 1: Project Scaffolding & Database Normalization (Stage 2 & 3)
 ```text
@@ -68,7 +68,7 @@ Implement Stage 6 Gemini AI Integration:
   if (nameA < nameB) return -1;
   if (nameA > nameB) return 1;
   ```
-- **Outcome**: Benchmark execution dropped from ~6,100 ms to **238–256 ms** median for full ranking and **94–101 ms** median for top-100 early exit, achieving over **740,000–826,000 candidates/second** throughput (2.2x–2.8x speedup over the 260–268 ms baseline).
+- **Outcome**: Benchmark execution dropped from ~6,100 ms to **279.97 ms** mean (**253.88 ms** median) for full ranking and **134.23 ms** mean (**102.18 ms** median) for top-100 early exit. Throughput reached 745,003 cand/sec by mean (978,665 cand/sec by median) for top-100 early exit, achieving a 2.03x mean (2.59x median) speedup over the 272.73 ms baseline. *(Note: These reflect synthetic in-memory benchmark measurements on generated candidate data, not production server performance).*
 
 ### 2. Deterministic Skill Ordering Across Dual Algorithms
 - **Initial AI Output**: The baseline and bucket sort functions collected matching skills into native `Set` objects and converted them back to arrays via `Array.from(set)`.
@@ -107,24 +107,24 @@ Implement Stage 6 Gemini AI Integration:
 
 ### 2. Comprehensive Test Suite Generation (70 Passing Tests)
 - **Acceleration**: Rapidly scaffolding test suites covering HTTP error envelopes, SQL query filters, edge-case candidate rankings, and mock Gemini failures.
-- **Verification**: Executed with Node.js native test runner and Vitest across all workspaces:
-  - **Backend**: 60 passed (23 REST API, 6 DB/schema, 11 ranking, 9 bug-fix, 11 AI routes).
-  - **Frontend**: 10 passed (rendering, filtering, status mutations, modal interactions, AI evaluation, error states).
+- **Verification & Execution Duration**: Executed across workspaces:
+  - **Backend**: 60 passed (~25s total duration across 11 test suites with isolated in-memory SQLite instances).
+  - **Frontend**: 10 passed (~2.7s duration in Vitest for rendering, filtering, status mutations, and modal drawer).
   - **Total**: **70 tests passing, 0 failures, 0 skipped**.
 
 ---
 
-## 5. Mocked Tests vs. Live Gemini Smoke Test
+## 5. Mocked Tests vs. Manual Live Verification
 
-To ensure reliability, compliance, and zero test execution costs:
+To ensure reliability, reproducibility, and zero test execution costs:
 
 1. **Automated Test Suite (100% Mocked)**:
    - All 11 tests in `backend/tests/aiRoutes.test.ts` and all 10 tests in `frontend/src/test/Dashboard.test.tsx` use an injected `IGeminiClient` mock.
    - Tests execute with zero network dependency, zero API key requirement, and zero token expense.
    - Covers rate limits (`429`), authentication errors (`503`), safety filters (`422`), timeouts (`504`), and invalid model JSON (`502`).
 
-2. **Live Gemini Smoke Test (Real API Verification)**:
-   - A dedicated verification script was executed against the live Google Gemini API using `gemini-3.8-flash` on real candidate `cand_001` (Sameer Rao).
+2. **Manual Live Verification (Development Check)**:
+   - A manual check was run during development with a valid API key against the live Google Gemini API using `gemini-3.8-flash` on real candidate `cand_001` (Sameer Rao) to confirm end-to-end schema adherence.
    - **Verified Live Response**:
      - Status: `200 OK`
      - Candidate: `Sameer Rao`
@@ -132,6 +132,7 @@ To ensure reliability, compliance, and zero test execution costs:
      - One-Line Summary: *"Sameer possesses the core technical stack of Java, Spring Boot, and Kubernetes with 6 years of experience, but specific ML platform and cloud infrastructure depth remain unverified."*
      - Supported Skills: `['Java', 'Spring Boot', 'Kubernetes']`
      - Model: `gemini-3.8-flash`
+   - *Note: No live smoke-test script or API credentials are included in the repository; all repository test suites run 100% mocked.*
 
 ---
 
@@ -142,8 +143,8 @@ To ensure reliability, compliance, and zero test execution costs:
 2. **Strict Grounding Boundary**:
    - The prompt instructs Gemini to evaluate *only* explicit facts present in the database profile.
    - If a requirement is not explicitly listed, it is assigned to `missingOrUnverifiedSkills` rather than inferred.
-3. **Prompt Injection & Data Sanitization**:
-   - Recruiter job descriptions and candidate notes are XML-escaped and fenced inside distinct XML tags (`<job_description>` and `<candidate_profile>`), neutralizing jailbreak attempts.
+3. **Prompt Injection Mitigation & Input Fencing**:
+   - Recruiter job descriptions and candidate notes are XML-escaped and fenced inside distinct XML tags (`<job_description>` and `<candidate_profile>`), providing input fencing to mitigate prompt injection risks.
 4. **Demographic Bias Mitigation Guardrails**:
    - System instructions strictly prohibit evaluating or inferring protected demographic characteristics (race, gender, age, disability, nationality).
    - This provides essential risk mitigation and behavioral guardrails; however, it does not guarantee absolute zero bias, which is why human recruiter sign-off remains mandatory on all triage decisions.

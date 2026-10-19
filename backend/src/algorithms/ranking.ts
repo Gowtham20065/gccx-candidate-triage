@@ -1,6 +1,6 @@
 /**
  * Candidate Ranking Algorithms (Task 2a)
- * 
+ *
  * Provides robust, deterministic, and highly efficient candidate skill-overlap ranking
  * capable of scaling effortlessly to 100,000+ candidates.
  */
@@ -128,7 +128,7 @@ function resolveComparator<T extends CandidateLike>(
 
 /**
  * Baseline Candidate Ranking Implementation
- * 
+ *
  * Complexity:
  * - Time: O(N * S_c + N log N), where N is candidate count, S_c is average candidate skills.
  * - Space: O(N) auxiliary memory for ranked results.
@@ -181,7 +181,7 @@ export function rankCandidatesBaseline<T extends CandidateLike>(
 
 /**
  * Optimized Candidate Ranking Implementation for 100,000+ candidates
- * 
+ *
  * Optimization Strategy:
  * 1. Normalized Required Skills Set: O(R) setup.
  * 2. Distinct Candidate Match Scoring: O(S_c) per candidate.
@@ -192,11 +192,18 @@ export function rankCandidatesBaseline<T extends CandidateLike>(
  * 4. Localized Sorting / Early Exit:
  *    Only non-empty buckets are sorted with the tie-breaker. When a top-K limit is specified,
  *    we stop processing lower buckets once K elements have been gathered, eliminating unnecessary sorting!
- * 
- * Complexity:
- * - Time: O(N * S_c + sum(B_i log B_i)), where B_i is the size of each score bucket.
- *   With top-K limit: O(N * S_c + K log K).
- * - Space: O(N) to hold references in buckets without duplicating candidate data.
+ *
+ * Complexity & Trade-Offs:
+ * - Time:
+ *   - Setup & Partitioning: O(N * S_c) where S_c is the number of skills per candidate and R is the required skill count.
+ *   - Bucket Sorting: Because each visited bucket is sorted in full with the tie-breaker comparator,
+ *     sorting takes O(sum_{s in visited} B_s log B_s) where B_s is the size of bucket s.
+ *     In the worst case (e.g. if all candidates cluster into the highest bucket, B_top ~ N),
+ *     this remains O(N log N) rather than O(N * S_c + K log K).
+ *   - Practical Benefit: In typical recruitment datasets, high-match buckets are sparse. Top-K early exit
+ *     gathers K candidates and completely skips sorting and inspecting all lower-scoring buckets,
+ *     bypassing the vast majority of zero- and low-match applicants.
+ * - Space: O(N) to hold candidate references in score buckets without duplicating underlying data.
  */
 export function rankCandidatesOptimized<T extends CandidateLike>(
   candidates: readonly T[],

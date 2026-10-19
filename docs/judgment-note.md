@@ -1,43 +1,27 @@
 # Engineering Judgment Note: Scaling to 3,000 Candidates/Week
 
-**Context:** Rollout to high-volume recruitment client | **Resources:** 2 engineers, 2 weeks  
-**Current Baseline (Shipped):** Express + SQLite (WAL mode, indexed 3NF schema, 60 backend tests), React dashboard (10 frontend tests), Bucket Sort ranking engine (>740,000 cand/sec), and on-demand Gemini-based fit summaries with structured JSON output.
+**Scenario:** Client rollout handling 3,000 candidates/week (~430/day) with 2 engineers over 2 weeks.
+**Baseline:** SQLite prototype (indexed 3NF schema, WAL mode), React UI, bucket-sort ranking, on-demand Gemini fit summaries.
 
 ---
 
-### 1. What We Build First (Weeks 1–2 Priority)
+### Proposed Scaling Plan (Weeks 1–2 Priority)
 
-1. **Two-Tier Screening (Deterministic Ranking $\rightarrow$ Selective LLM)**:
-   - Calling Gemini on all 3,000 weekly applicants would incur high latency and unnecessary API spend.
-   - *Plan*: Run our $O(N \cdot S_c + K \log K)$ Bucket Sort to pre-filter applicants to the top 10% (300 candidates). Invoke Gemini candidate-fit summaries exclusively on this shortlisted pool.
-2. **Asynchronous Ingestion & Idempotent Deduplication**:
-   - Ingesting ~430 candidates/day creates write bursts. Introduce an asynchronous worker queue (BullMQ + Redis or dedicated SQLite WAL batch worker).
-   - Enforce deduplication on `(normalized_email, phone)` and composite matching on `(normalized_name, applied_date)` to eliminate redundant records.
-3. **LLM Response Caching & Rate-Limit Backoff**:
-   - Cache fit evaluations by `SHA256(candidate_id + job_description_hash)` in Redis to avoid re-evaluating unchanged candidate-job pairs.
-   - Add jittered exponential backoff and circuit breaking to absorb upstream Gemini 429 quota spikes.
-4. **Recruiter Bulk Actions & Audit Logging**:
-   - Add multi-candidate triage mutations (`shortlist_selected`, `reject_selected`) and an append-only `audit_log` table recording user ID, candidate ID, previous status, new status, and timestamp.
+1. **Two-Tier Screening (Proposed)**: Avoid calling Gemini on all 3,000 weekly applicants. Deterministically rank candidates with bucket sorting; early-exit skips sorting lower-scoring applicants. Invoke Gemini fit evaluations strictly on the top 10% (~300 candidates), cutting API spend by ~90%.
+2. **Asynchronous Ingestion Worker (Proposed)**: Buffer traffic bursts and deduplicate incoming candidates idempotently via an asynchronous queue (BullMQ/Redis or batch worker).
+3. **Response Caching & Resiliency (Proposed)**: Cache structured LLM evaluations by `SHA256(candidate_id + jd_hash)` with jittered backoff for rate limits.
+4. **Recruiter Bulk Actions & Audit Trail (Proposed)**: Add bulk status updates and an append-only triage audit log.
 
----
+### What We Explicitly Defer
 
-### 2. What We Explicitly Refuse to Build Yet
+- **Autonomous Decisions**: Automated rejections or hiring decisions are rejected to mitigate regulatory liability (EEOC, Title VII, NYC Local Law 144); AI remains advisory.
+- **Heavy Infrastructure**: Defer vector databases and custom PDF OCR until ATS webhook integration is established.
 
-- **Autonomous Rejection / Auto-Hiring**: AI output must remain advisory decision support to mitigate compliance risks under evolving employment and algorithmic hiring standards (e.g. EEOC, Title VII, NYC Local Law 144).
-- **Multimodal Raw Resume OCR (PDF/DOCX)**: Require structured ATS webhooks (Greenhouse/Lever) or JSON payloads; custom document parsing introduces high edge-case maintenance without matching triage value.
-- **Complex Vector Search Infrastructure**: Managing Pinecone or pgvector clusters for 3,000 candidates/week is premature; our indexed SQL filters and deterministic skill overlap solve recruiter queries sub-millisecond.
-- **Custom Model Fine-Tuning**: Zero-shot structured prompting on `gemini-3.8-flash` delivers high factual accuracy without dataset curation overhead.
+### #1 Critical Risk Flagged to Management
 
----
+**Recruiter Over-Reliance & Disparate Impact:** Recruiters may treat advisory summaries as definitive verdicts.
+*Mitigation:* Mandatory recruiter sign-off, displaying verified versus unverified skill gaps, and excluding demographic data from prompts.
 
-### 3. The #1 Critical Risk Flagged to Management
+### Measurable Target SLOs
 
-> **Risk: Recruiter Over-Reliance & Disparate Impact Exposure.**  
-> If hiring teams treat AI fit summaries as definitive screening verdicts rather than advisory notes, GCCX faces regulatory liability and risks filtering out non-traditional candidates whose resumes lack exact keyword matches.  
-> **Mitigation**: Enforce mandatory human recruiter review before any status change, display verified `supported_skills` alongside unverified gaps, and exclude protected demographic attributes from ingestion.
-
----
-
-### 4. Target SLOs & Rollout
-- **SLOs**: Ingestion batch throughput $< 30$s for 500 records; Search P95 $< 100$ms; LLM fit P95 $< 2.5$s on-demand with $> 70\%$ cache hit rate.
-- **Rollout**: Week 1: Ingestion worker + cached ranking. Week 2: Bulk UI actions + audit logging + shadow testing on 500 historical records prior to client go-live.
+Batch ingestion $< 30$s per 500 records; search P95 $< 100$ms; LLM fit P95 $< 2.5$s with $> 70\%$ cache hit rate.

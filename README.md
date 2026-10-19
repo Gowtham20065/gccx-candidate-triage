@@ -236,20 +236,20 @@ All endpoints return JSON and use standard HTTP status codes. Errors follow a co
 2. **Idempotent, Non-Destructive Seeding**:
    - `seedCandidates` utilizes `INSERT INTO candidates ... ON CONFLICT(id) DO UPDATE SET ...` while **deliberately omitting** the `status` column from update mutations. This ensures that rerun seeds update master candidate biographical fields without resetting or destroying recruiter triage decisions.
 3. **Normalized Skill Storage**:
-   - Rather than storing skills only as unstructured JSON strings, a 3NF relation (`skills` and `candidate_skills`) is maintained. This allows $O(1)$ indexed skill filtering and aggregation for the client search requirements in Task 2.
+   - Rather than storing skills only as unstructured JSON strings, a 3NF relation (`skills` and `candidate_skills`) is maintained. This allows fast, B-tree indexed skill filtering and relational aggregation via foreign-key indexes.
 4. **Isolated Test Execution**:
    - Automated tests instantiate fresh, isolated in-memory SQLite instances (`:memory:`), preventing race conditions and leaving the local development database (`data/candidates.db`) clean.
 5. **AI Integration Architecture & Security Boundaries**:
    - The AI Candidate-Fit feature utilizes `@google/genai` targeting `gemini-3.8-flash` (or configurable via `LLM_MODEL`).
    - **Zero Key Leakage**: `LLM_API_KEY` (and compatibility fallback `GEMINI_API_KEY`) is stored strictly in server-side `.env` and is never exposed to Vite frontend bundles, client payloads, or error logs.
    - **Grounded Verification**: The backend retrieves candidate profiles directly from SQLite via `getCandidateById`. Client-supplied candidate claims are ignored.
-   - **Prompt Injection Defense**: Untrusted user inputs (`jobDescription` and candidate `notes`) are XML-escaped and wrapped within isolated XML tags `<job_description>` and `<candidate_profile>`.
+   - **Prompt Injection Mitigation**: Untrusted user inputs (`jobDescription` and candidate `notes`) are XML-escaped and fenced within isolated XML tags `<job_description>` and `<candidate_profile>` to mitigate prompt injection risks.
    - **Ethical Guardrails**: System instructions strictly prohibit inferring or evaluating protected demographic characteristics (race, gender, age, disability, nationality, etc.).
-   - **Structured JSON Output**: Enforces a strict response schema (`responseMimeType: 'application/json'`, `responseSchema`) to eliminate parsing errors and guarantee typed output fields.
+   - **Structured JSON Output**: Enforces a strict response schema (`responseMimeType: 'application/json'`, `responseSchema`) to validate typed output fields.
    - **Decision Support**: Every AI response includes an explicit disclaimer that evaluations are advisory decision support for human recruiters and do not constitute automated hiring decisions.
 6. **Semantic Search Scope & Roadmap Decision**:
    - The case-study brief requires *one* AI-powered feature. We prioritized the **Candidate-Fit Summary and Gap Analysis** because recruiters triaging active job orders gain immediate value from seeing verified versus unverified requirements.
-   - Building a production-grade vector search engine requires an embedding pipeline (e.g. `text-embedding-004`), persistent vector indexing (`sqlite-vss` / HNSW), embedding cache invalidation, and cosine similarity ranking. For a 48-candidate dataset under the time budget, an in-memory embedding loop would introduce unnecessary API latency and rate-limit overhead without adding higher triage utility than targeted fit evaluation. The modular architecture is designed for a vector search extension in a follow-up sprint.
+   - Building a full-scale vector search engine requires an embedding pipeline (e.g. `text-embedding-004`), persistent vector indexing (`sqlite-vss` / HNSW), embedding cache invalidation, and cosine similarity ranking. For a 48-candidate dataset under the time budget, an in-memory embedding loop would introduce unnecessary API latency and rate-limit overhead without adding higher triage utility than targeted fit evaluation. The modular architecture is designed for a vector search extension in a follow-up sprint.
 
 ---
 
@@ -270,15 +270,15 @@ Located in `backend/src/algorithms/ranking.ts`:
   4. **Candidate ID** (ascending) — absolute unique tie-breaker.
 - **Input Immutability**: All operations preserve original candidate objects and skill arrays without mutation.
 - **Two Implementations**:
-  1. `rankCandidatesBaseline`: Direct mapping and full array sort $O(N \log N)$.
-  2. `rankCandidatesOptimized`: Partitioning into $R + 1$ score buckets (Bucket Sort) where $R$ is the number of distinct required skills ($R \le 30$). Enables $O(N)$ distribution and early-exit top-K pruning ($O(N + K \log K)$) when only top candidates are needed.
+  1. `rankCandidatesBaseline`: Direct mapping and full array sort $O(N \cdot S_c + N \log N)$.
+  2. `rankCandidatesOptimized`: Partitioning into $R + 1$ score buckets (Bucket Sort) where $R$ is the number of distinct required skills ($R \le 30$). Enables linear $O(N \cdot S_c)$ distribution and top-K early exit that halts processing once $K$ candidates are accumulated.
 
 #### Complexity Analysis & Trade-Offs
 
-| Implementation | Time Complexity (Full) | Time Complexity (Top-K) | Space Complexity | Practical Trade-Off |
+| Implementation | Time Complexity (Full) | Time Complexity (Top-K Early Exit) | Space Complexity | Practical Behavior & Trade-Offs |
 | :--- | :--- | :--- | :--- | :--- |
-| **Baseline** | $O(N \cdot S_c + N \log N)$ | $O(N \cdot S_c + N \log N)$ | $O(N)$ | Simpler to read, but wastes CPU cycles sorting tens of thousands of zero-match candidates. |
-| **Optimized Bucket Sort** | $O(N \cdot S_c + \sum B_i \log B_i)$ | $O(N \cdot S_c + K \log K)$ | $O(N)$ | Highly efficient for real-world recruiting where $R \ll N$. Employs early exit to only sort the highest scoring buckets. |
+| **Baseline** | $O(N \cdot S_c + N \log N)$ | $O(N \cdot S_c + N \log N)$ | $O(N)$ | Sorts the entire candidate array with the multi-attribute comparator, spending CPU time ordering thousands of low- or zero-match applicants. |
+| **Optimized Bucket Sort** | $O(N \cdot S_c + \sum_{s \in \text{all}} B_s \log B_s)$ | $O(N \cdot S_c + \sum_{s \in \text{visited}} B_s \log B_s)$ | $O(N)$ | Partitions candidates in $O(N \cdot S_c)$ time. Because each visited bucket is sorted in full with the tie-breaker comparator, worst-case time remains $O(N \log N)$ if candidates cluster in the top bucket. In practice, top score buckets are sparse; early exit gathers $K$ candidates and skips sorting and inspecting all lower-scoring buckets entirely. |
 
 ---
 
@@ -319,19 +319,28 @@ function matchCandidates(candidates, requiredSkills) {
 
 ### Realistic 100,000 Candidate Benchmark
 
-To verify scale requirements empirically, a reproducible benchmark generates 100,000 synthetic candidates using the **Mulberry32 PRNG** (fixed seed `20261019`):
+To evaluate scaling behavior empirically, a reproducible synthetic benchmark was executed using the **Mulberry32 PRNG** (fixed seed `20261019`):
 
-- **Dataset**: 100,000 candidates, 60 unique skills in pool, 8 required skills, 4–12 skills per candidate.
-- **Environment**: Node.js `v22.22.2`, Windows x64.
-- **Timing**: High-resolution `performance.now()`, 2 warm-up runs, 5 measured iterations.
+- **Benchmark Configuration**:
+  - Candidate Count: 100,000 synthetic candidates.
+  - Skill Pools: 60 unique skills in pool; 8 required skills; 4–12 skills per candidate.
+  - Environment: Node.js `v22.22.2`, Windows x64 (`win32 / x64`).
+  - Iterations: High-resolution `performance.now()`, 2 warm-up runs, 5 measured runs.
+  - Throughput Formula: $\text{Throughput} = \frac{\text{Candidate Count}}{\text{Latency in seconds}} = \frac{100,000}{\text{latency\_ms} / 1000}$.
 
-#### Measured Results (Actual Run)
+#### Newly Measured Results
 
-| Algorithm Variant | Mean Latency | Median Latency | Throughput | Speedup vs Baseline |
-| :--- | :--- | :--- | :--- | :--- |
-| **Baseline (Full Array Sort)** | **266.69 ms** | 260.75 ms | 374,963 cand/sec | 1.00x (Ref) |
-| **Optimized Bucket Sort (Full Rank)** | **252.35 ms** | 237.90 ms | 396,276 cand/sec | 1.06x |
-| **Optimized (Top-100 Early Exit)** | **126.75 ms** | **94.03 ms** | **788,973 cand/sec** | **2.10x – 2.8x** |
+| Algorithm Variant | Mean Latency | Median Latency | Min Latency | Throughput (Mean) | Throughput (Median) | Speedup vs Baseline (Mean / Median) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Baseline (Full Array Sort)** | 272.73 ms | 265.00 ms | 263.73 ms | 366,667 cand/sec | 377,358 cand/sec | 1.00x (Ref) |
+| **Optimized Bucket Sort (Full Rank)** | 279.97 ms | 253.88 ms | 241.63 ms | 357,182 cand/sec | 393,887 cand/sec | 0.97x (mean) / 1.04x (median) |
+| **Optimized (Top-100 Early Exit)** | 134.23 ms | 102.18 ms | 99.28 ms | 745,003 cand/sec | 978,665 cand/sec | 2.03x (mean) / 2.59x (median) |
+
+#### Methodology & Interpretation
+
+1. **Synthetic vs. Production Performance**: These figures measure raw in-memory algorithmic processing of generated JavaScript candidate objects. They do not represent end-to-end production server response times, which are bounded by network I/O, SQLite disk operations, and HTTP serialization.
+2. **Full Ranking Comparison**: When sorting all 100,000 candidates completely, Bucket Sort performs comparably to the baseline sort (0.97x mean, 1.04x median) because every non-empty score bucket must still be visited and sorted in full with the 4-tier tie-breaking comparator.
+3. **Top-K Early Exit Advantage**: In practical recruiter workflows (such as retrieving the top 100 matches), Bucket Sort halts as soon as 100 candidates are collected from the highest score buckets. It completely skips sorting and traversing the lower-scoring buckets, yielding a measured 2.03x mean (2.59x median) speedup over baseline sorting.
 
 Run the benchmark locally:
 ```bash
@@ -379,7 +388,7 @@ npm run benchmark
    ```bash
    npm test
    ```
-   *Note: All automated tests use mocked provider responses and execute with 100% determinism without consuming Gemini API tokens or requiring an internet connection.*
+   *Note: All 70 automated tests use mocked provider responses and execute with 100% determinism without consuming Gemini API tokens or requiring an internet connection. Measured execution times: Backend (~25s across 60 tests and 11 test suites with isolated in-memory SQLite instances) and Frontend (~2.7s across 10 Vitest tests).*
 
 5. **Run Performance Benchmark** (100,000 synthetic candidates):
    ```bash
@@ -406,7 +415,8 @@ npm run benchmark
      npm run dev
      ```
 
-8. **Optional Live Gemini Smoke Test** (requires valid `LLM_API_KEY` in `.env`):
+8. **Optional Live Gemini Manual Verification Command** (requires valid `LLM_API_KEY` in `.env`):
+   *Note: The repository's automated test suites are 100% mocked and require no external keys. The inline Node command below is an optional developer check to manually verify live Gemini API connectivity with your own configured key:*
    ```bash
    node -e "
    require('dotenv').config({ path: './.env' });
