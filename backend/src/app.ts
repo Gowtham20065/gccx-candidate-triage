@@ -4,6 +4,9 @@ import type Database from 'better-sqlite3';
 import { config } from './config';
 import { createCandidateRouter } from './routes/candidateRoutes';
 import { createSkillRouter } from './routes/skillRoutes';
+import { createStatsRouter } from './routes/statsRoutes';
+import { createRoleRouter } from './routes/roleRoutes';
+import { createSourceRouter } from './routes/sourceRoutes';
 import { createAiRouter } from './routes/aiRoutes';
 import { GeminiService } from './services/geminiService';
 import { errorHandler } from './middleware/errorHandler';
@@ -46,6 +49,9 @@ export function createApp(db: Database.Database, geminiService?: GeminiService):
   // REST API Endpoints
   app.use('/api/candidates', createCandidateRouter(db));
   app.use('/api/skills', createSkillRouter(db));
+  app.use('/api/stats', createStatsRouter(db));
+  app.use('/api/roles', createRoleRouter(db));
+  app.use('/api/sources', createSourceRouter(db));
   app.use('/api/ai', createAiRouter(db, geminiService));
 
   // Catch-all for undefined routes

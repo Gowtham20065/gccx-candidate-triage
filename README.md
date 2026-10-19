@@ -186,7 +186,39 @@ All endpoints return JSON and use standard HTTP status codes. Errors follow a co
   }
   ```
 
-#### 6. `POST /api/ai/candidate-fit`
+#### 6. `GET /api/stats`
+- **Description**: Returns aggregate candidate counts grouped by triage status via a single database `GROUP BY` query.
+- **Response `200 OK`**:
+  ```json
+  {
+    "total": 48,
+    "untriaged": 48,
+    "shortlisted": 0,
+    "rejected": 0
+  }
+  ```
+
+#### 7. `GET /api/roles`
+- **Description**: Returns all distinct candidate target roles in alphabetical order.
+- **Response `200 OK`**:
+  ```json
+  {
+    "data": ["Backend Engineer", "DevOps Engineer", "Frontend Engineer", "Full Stack Engineer", "ML Engineer"],
+    "total": 5
+  }
+  ```
+
+#### 8. `GET /api/sources`
+- **Description**: Returns all distinct candidate recruitment sources in alphabetical order.
+- **Response `200 OK`**:
+  ```json
+  {
+    "data": ["AngelList", "Direct", "GitHub", "Indeed", "LinkedIn", "Naukri", "Referral"],
+    "total": 7
+  }
+  ```
+
+#### 9. `POST /api/ai/candidate-fit`
 - **Description**: Generates an evidence-grounded candidate fit summary and gap analysis against a recruiter job description using Google Gemini (`gemini-3.8-flash`). Fetches candidate facts strictly from SQLite rather than client input.
 - **Request Body**:
   ```json
@@ -393,11 +425,11 @@ npm run benchmark
    npm run db:seed
    ```
 
-4. **Run Automated Test Suite** (70 tests, zero external API calls):
+4. **Run Automated Test Suite** (75 tests, zero external API calls):
    ```bash
    npm test
    ```
-   *Note: All 70 automated tests use mocked provider responses and execute with 100% determinism without consuming Gemini API tokens or requiring an internet connection. Measured execution times: Backend (~25s across 60 tests and 11 test suites with isolated in-memory SQLite instances) and Frontend (~2.7s across 10 Vitest tests).*
+   *Note: All 75 automated tests use mocked provider responses and execute with 100% determinism without consuming Gemini API tokens or requiring an internet connection. Measured execution times: Backend (~25s across 65 tests and 14 test suites with isolated in-memory SQLite instances) and Frontend (~2.8s across 10 Vitest tests).*
 
 5. **Run Performance Benchmark** (100,000 synthetic candidates):
    ```bash

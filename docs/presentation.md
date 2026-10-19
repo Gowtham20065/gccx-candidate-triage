@@ -133,7 +133,7 @@
      - Inspect structured output: fit level, supported skills, unverified requirements, and interview probing flags.
 - **Defensive API Architecture**:
   - XML sanitization fencing (`<job_description>`, `<candidate_profile>`) mitigating prompt injection.
-  - 100% mocked automated tests (60 backend in ~25s, 10 frontend in ~2.8s) covering 429, 503, 422, and 504 errors.
+  - 100% mocked automated tests (65 backend in ~25s, 10 frontend in ~2.8s) covering 429, 503, 422, and 504 errors.
 
 ### Suggested Visual
 ```text
@@ -189,7 +189,7 @@ Client Launch ◄────────── [ Human Recruiter Sign-Off ] ◄
   2. *Two-Way ATS Sync*: Webhook integrations with Greenhouse and Lever for automated candidate imports and two-way status export.
   3. *Persistent Evaluation Store*: Create an `evaluations` table in SQLite to persist LLM fit summaries and track recruiter agreement rates over time.
   4. *Recruiter Collaboration*: Shared candidate shortlists, recruiter comments, and role-based permissions.
-- **Summary**: A disciplined, high-performance foundation built under tight time constraints, fully tested (70 passing tests), and designed for progressive scaling.
+- **Summary**: A disciplined, high-performance foundation built under tight time constraints, fully tested (75 passing tests), and designed for progressive scaling.
 
 ### Suggested Visual
 ```text
@@ -203,5 +203,5 @@ Client Launch ◄────────── [ Human Recruiter Sign-Off ] ◄
 
 ### Speaker Notes
 > "To conclude, if given a full two-week sprint, we would transition this prototype into a multi-tenant enterprise service. We would introduce an inverted index and local SQLite-VSS vector search, build two-way ATS sync with Greenhouse and Lever, persist LLM fit summaries in an evaluations table to track recruiter agreement rates, and add team collaboration tools.
-> We delivered a complete TypeScript monorepo, 70 passing tests, honest benchmark data, an accessible React dashboard, and a grounded Gemini integration—achieved with disciplined scope and defensible code.
+> We delivered a complete TypeScript monorepo, 75 passing tests, honest benchmark data, an accessible React dashboard, and a grounded Gemini integration—achieved with disciplined scope and defensible code.
 > Thank you, and I look forward to walking through the codebase and answering your questions."

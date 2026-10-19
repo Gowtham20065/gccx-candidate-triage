@@ -82,6 +82,8 @@ describe('Candidate Triage Dashboard UI Tests', () => {
 
     vi.spyOn(api, 'fetchHealth').mockResolvedValue(mockHealth);
     vi.spyOn(api, 'fetchSkills').mockResolvedValue(mockSkills);
+    vi.spyOn(api, 'fetchRoles').mockResolvedValue(['DevOps Engineer', 'Frontend Engineer', 'ML Engineer']);
+    vi.spyOn(api, 'fetchSources').mockResolvedValue(['AngelList', 'Naukri', 'Referral']);
     vi.spyOn(api, 'fetchTriageStats').mockResolvedValue(mockStats);
     vi.spyOn(api, 'fetchCandidates').mockResolvedValue({
       data: mockCandidates,

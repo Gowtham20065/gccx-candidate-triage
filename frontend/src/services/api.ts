@@ -141,22 +141,26 @@ export async function fetchHealth(): Promise<HealthResponse> {
 
 /**
  * Fetches comprehensive triage stats (total, untriaged, shortlisted, rejected)
- * via parallel requests supported by the real API.
+ * via dedicated /api/stats endpoint (single GROUP BY query).
  */
 export async function fetchTriageStats(): Promise<TriageStats> {
-  const [totalRes, untriagedRes, shortlistedRes, rejectedRes] = await Promise.all([
-    fetchCandidates({ limit: 1 }),
-    fetchCandidates({ limit: 1, status: 'untriaged' }),
-    fetchCandidates({ limit: 1, status: 'shortlisted' }),
-    fetchCandidates({ limit: 1, status: 'rejected' }),
-  ]);
+  return request<TriageStats>('/api/stats');
+}
 
-  return {
-    total: totalRes.pagination.total,
-    untriaged: untriagedRes.pagination.total,
-    shortlisted: shortlistedRes.pagination.total,
-    rejected: rejectedRes.pagination.total,
-  };
+/**
+ * Fetches available candidate target roles.
+ */
+export async function fetchRoles(): Promise<string[]> {
+  const res = await request<{ data: string[] }>('/api/roles');
+  return res.data;
+}
+
+/**
+ * Fetches available candidate recruitment sources.
+ */
+export async function fetchSources(): Promise<string[]> {
+  const res = await request<{ data: string[] }>('/api/sources');
+  return res.data;
 }
 
 /**

@@ -6,6 +6,7 @@ import type {
   CandidateWithSkills,
   PaginatedResult,
   SkillCount,
+  TriageStats,
   TriageStatus,
 } from '../db/types';
 
@@ -210,4 +211,59 @@ export function listSkills(db: Database.Database): SkillCount[] {
   `);
 
   return stmt.all();
+}
+
+/**
+ * Returns aggregate candidate counts by triage status via a single GROUP BY query.
+ */
+export function getTriageStats(db: Database.Database): TriageStats {
+  const rows = db.prepare(`
+    SELECT status, COUNT(*) AS count
+    FROM candidates
+    GROUP BY status
+  `).all() as { status: string; count: number }[];
+
+  const stats: TriageStats = {
+    total: 0,
+    untriaged: 0,
+    shortlisted: 0,
+    rejected: 0,
+  };
+
+  for (const row of rows) {
+    stats.total += row.count;
+    if (row.status === 'untriaged') stats.untriaged = row.count;
+    else if (row.status === 'shortlisted') stats.shortlisted = row.count;
+    else if (row.status === 'rejected') stats.rejected = row.count;
+  }
+
+  return stats;
+}
+
+/**
+ * Lists all distinct candidate target roles in alphabetical order.
+ */
+export function listRoles(db: Database.Database): string[] {
+  const rows = db.prepare(`
+    SELECT DISTINCT target_role
+    FROM candidates
+    WHERE target_role IS NOT NULL AND TRIM(target_role) != ''
+    ORDER BY target_role ASC
+  `).all() as { target_role: string }[];
+
+  return rows.map((r) => r.target_role);
+}
+
+/**
+ * Lists all distinct candidate recruitment sources in alphabetical order.
+ */
+export function listSources(db: Database.Database): string[] {
+  const rows = db.prepare(`
+    SELECT DISTINCT source
+    FROM candidates
+    WHERE source IS NOT NULL AND TRIM(source) != ''
+    ORDER BY source ASC
+  `).all() as { source: string }[];
+
+  return rows.map((r) => r.source);
 }

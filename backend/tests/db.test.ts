@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import path from 'path';
+import fs from 'fs';
 import { createDatabase } from '../src/db/index';
 import { seedCandidates } from '../src/db/seed';
 import {
@@ -129,5 +130,42 @@ describe('Database & Schema Tests (Isolated in-memory)', () => {
     assert.strictEqual(skillsAfter, 0, 'Candidate skills must cascade delete');
 
     db.close();
+  });
+
+  it('cleans up obsolete candidate_skills associations upon re-seeding with updated data', () => {
+    const db = createDatabase(':memory:');
+    seedCandidates(db, jsonPath);
+
+    const initialCand = getCandidateById(db, 'cand_001');
+    assert.ok(initialCand?.skills.includes('Spring Boot'));
+
+    // Create a temporary mock JSON where cand_001 has only ['Python']
+    const tempJsonPath = path.resolve(__dirname, '../../data/test-temp-candidates.json');
+    const modifiedCandidates = [
+      {
+        id: 'cand_001',
+        name: 'Sameer Rao',
+        target_role: 'ML Engineer',
+        years_experience: 6,
+        source: 'Referral',
+        skills: ['Python'],
+        notes: 'Updated notes',
+        applied_date: '2026-09-10',
+      },
+    ];
+    fs.writeFileSync(tempJsonPath, JSON.stringify(modifiedCandidates, null, 2), 'utf8');
+
+    try {
+      seedCandidates(db, tempJsonPath);
+      const updatedCand = getCandidateById(db, 'cand_001');
+      assert.strictEqual(updatedCand?.skills.length, 1);
+      assert.strictEqual(updatedCand?.skills[0], 'Python');
+      assert.strictEqual(updatedCand?.skills.includes('Spring Boot'), false);
+    } finally {
+      if (fs.existsSync(tempJsonPath)) {
+        fs.unlinkSync(tempJsonPath);
+      }
+      db.close();
+    }
   });
 });

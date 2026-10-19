@@ -46,6 +46,10 @@ export function seedCandidates(
     SELECT id FROM skills WHERE name = ? COLLATE NOCASE
   `);
 
+  const deleteCandidateSkills = db.prepare(`
+    DELETE FROM candidate_skills WHERE candidate_id = ?
+  `);
+
   const insertCandidateSkill = db.prepare(`
     INSERT OR IGNORE INTO candidate_skills (candidate_id, skill_id) VALUES (?, ?)
   `);
@@ -61,6 +65,9 @@ export function seedCandidates(
         notes: record.notes,
         applied_date: record.applied_date,
       });
+
+      // Clear existing skill associations so re-seeding with modified skills removes stale links
+      deleteCandidateSkills.run(record.id);
 
       if (Array.isArray(record.skills)) {
         for (const skillName of record.skills) {

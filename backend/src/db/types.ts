@@ -30,6 +30,8 @@ export interface RawCandidateInput {
   applied_date: string;
 }
 
+export type SortColumn = 'applied_date' | 'years_experience' | 'name' | 'id';
+
 export interface CandidateFilterParams {
   q?: string;
   role?: string;
@@ -40,7 +42,7 @@ export interface CandidateFilterParams {
   skill?: string;
   page?: number;
   limit?: number;
-  sort_by?: 'applied_date' | 'years_experience' | 'name' | 'id';
+  sort_by?: SortColumn;
   sort_order?: 'asc' | 'desc';
 }
 
@@ -61,4 +63,11 @@ export interface PaginatedResult<T> {
 export interface SkillCount {
   name: string;
   count: number;
+}
+
+export interface TriageStats {
+  total: number;
+  untriaged: number;
+  shortlisted: number;
+  rejected: number;
 }

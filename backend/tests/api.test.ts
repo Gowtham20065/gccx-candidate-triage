@@ -145,6 +145,13 @@ describe('Candidate Triage REST API Tests', () => {
       assert.strictEqual(res.status, 400);
       assert.strictEqual(res.body.error.code, 'INVALID_QUERY_PARAMETER');
     });
+
+    it('returns 400 when min_experience is greater than max_experience', async () => {
+      const res = await request(app).get('/api/candidates?min_experience=8&max_experience=3');
+      assert.strictEqual(res.status, 400);
+      assert.strictEqual(res.body.error.code, 'INVALID_QUERY_PARAMETER');
+      assert.strictEqual(res.body.error.message, "Parameter 'min_experience' cannot be greater than 'max_experience'.");
+    });
   });
 
   describe('GET /api/candidates/:id', () => {
@@ -228,6 +235,45 @@ describe('Candidate Triage REST API Tests', () => {
       assert.strictEqual(res.body.data.length, 30);
       assert.ok(res.body.data[0].name);
       assert.ok(typeof res.body.data[0].count === 'number');
+    });
+  });
+
+  describe('GET /api/stats', () => {
+    it('returns aggregate triage stats via single GROUP BY query', async () => {
+      const res = await request(app).get('/api/stats');
+      assert.strictEqual(res.status, 200);
+      assert.strictEqual(res.body.total, 48);
+      assert.strictEqual(typeof res.body.untriaged, 'number');
+      assert.strictEqual(typeof res.body.shortlisted, 'number');
+      assert.strictEqual(typeof res.body.rejected, 'number');
+      assert.strictEqual(
+        res.body.total,
+        res.body.untriaged + res.body.shortlisted + res.body.rejected
+      );
+    });
+  });
+
+  describe('GET /api/roles', () => {
+    it('returns all unique target roles in alphabetical order', async () => {
+      const res = await request(app).get('/api/roles');
+      assert.strictEqual(res.status, 200);
+      assert.ok(Array.isArray(res.body.data));
+      assert.ok(res.body.total > 0);
+      assert.strictEqual(res.body.total, res.body.data.length);
+      const sorted = [...res.body.data].sort();
+      assert.deepStrictEqual(res.body.data, sorted);
+    });
+  });
+
+  describe('GET /api/sources', () => {
+    it('returns all unique recruitment sources in alphabetical order', async () => {
+      const res = await request(app).get('/api/sources');
+      assert.strictEqual(res.status, 200);
+      assert.ok(Array.isArray(res.body.data));
+      assert.ok(res.body.total > 0);
+      assert.strictEqual(res.body.total, res.body.data.length);
+      const sorted = [...res.body.data].sort();
+      assert.deepStrictEqual(res.body.data, sorted);
     });
   });
 

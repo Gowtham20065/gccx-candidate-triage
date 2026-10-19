@@ -8,6 +8,7 @@ import {
 import {
   VALID_TRIAGE_STATUSES,
   type CandidateFilterParams,
+  type SortColumn,
   type TriageStatus,
 } from '../db/types';
 
@@ -111,6 +112,21 @@ export function createCandidateRouter(db: Database.Database): Router {
         filters.max_experience = maxExp;
       }
 
+      // Validate min_experience does not exceed max_experience
+      if (
+        filters.min_experience !== undefined &&
+        filters.max_experience !== undefined &&
+        filters.min_experience > filters.max_experience
+      ) {
+        res.status(400).json({
+          error: {
+            code: 'INVALID_QUERY_PARAMETER',
+            message: "Parameter 'min_experience' cannot be greater than 'max_experience'.",
+          },
+        });
+        return;
+      }
+
       // String filters
       if (typeof q === 'string') filters.q = q;
       if (typeof role === 'string') filters.role = role;
@@ -119,8 +135,9 @@ export function createCandidateRouter(db: Database.Database): Router {
 
       // Sort validations
       if (sort_by !== undefined) {
-        const allowedSorts = ['applied_date', 'years_experience', 'name', 'id'];
-        if (!allowedSorts.includes(String(sort_by))) {
+        const allowedSorts: readonly SortColumn[] = ['applied_date', 'years_experience', 'name', 'id'];
+        const sortCandidate = String(sort_by) as SortColumn;
+        if (!allowedSorts.includes(sortCandidate)) {
           res.status(400).json({
             error: {
               code: 'INVALID_QUERY_PARAMETER',
@@ -129,7 +146,7 @@ export function createCandidateRouter(db: Database.Database): Router {
           });
           return;
         }
-        filters.sort_by = sort_by as any;
+        filters.sort_by = sortCandidate;
       }
 
       if (sort_order !== undefined) {

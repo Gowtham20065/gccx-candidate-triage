@@ -10,7 +10,9 @@ import type {
 import {
   fetchCandidates,
   fetchHealth,
+  fetchRoles,
   fetchSkills,
+  fetchSources,
   fetchTriageStats,
   updateCandidateStatus,
 } from './services/api';
@@ -113,19 +115,18 @@ export default function App(): React.JSX.Element {
         const health = await fetchHealth();
         setBackendConnected(health.status === 'ok');
 
-        const skillsData = await fetchSkills();
+        const [skillsData, rolesData, sourcesData] = await Promise.all([
+          fetchSkills(),
+          fetchRoles().catch(() => []),
+          fetchSources().catch(() => []),
+        ]);
         setAvailableSkills(skillsData);
-
-        // Fetch a broad sample to discover roles and sources
-        const broadSample = await fetchCandidates({ limit: 100 });
-        const rolesSet = new Set<string>();
-        const sourcesSet = new Set<string>();
-        broadSample.data.forEach((c) => {
-          if (c.target_role) rolesSet.add(c.target_role);
-          if (c.source) sourcesSet.add(c.source);
-        });
-        setAvailableRoles(Array.from(rolesSet).sort());
-        setAvailableSources(Array.from(sourcesSet).sort());
+        if (rolesData.length > 0) {
+          setAvailableRoles(rolesData);
+        }
+        if (sourcesData.length > 0) {
+          setAvailableSources(sourcesData);
+        }
       } catch (err: any) {
         console.warn('Initial metadata loading error:', err.message);
       }
