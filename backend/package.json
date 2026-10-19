@@ -9,6 +9,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "db:seed": "tsx src/db/seed.ts",
+    "benchmark": "tsx src/benchmarks/rankingBenchmark.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test \"tests/**/*.test.ts\""
   },

@@ -14,6 +14,7 @@
     "build": "npm run build --workspaces",
     "typecheck": "npm run typecheck --workspace=backend",
     "test": "npm run test --workspace=backend",
+    "benchmark": "npm run benchmark --workspace=backend",
     "db:seed": "npm run db:seed --workspace=backend"
   },
   "devDependencies": {

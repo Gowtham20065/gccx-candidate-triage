@@ -201,6 +201,93 @@ All endpoints return JSON and use standard HTTP status codes. Errors follow a co
 
 ---
 
+---
+
+## Task 2 — Code Problems & Algorithms
+
+### Task 2a: Ranking at Scale (100,000+ Candidates)
+
+Located in `backend/src/algorithms/ranking.ts`:
+
+- **Distinct Skill Overlap**: Computes the exact number of distinct required skills possessed by each candidate. Duplicate skills in either the candidate's profile or the query list never inflate scores.
+- **Strict Normalization**: Skills are trimmed and compared case-insensitively (`s.trim().toLowerCase()`).
+- **Deterministic Tie-Breaking**:
+  1. **Score** (descending) — most skill matches first.
+  2. **Years of Experience** (descending) — more seasoned candidates prioritized on equal match count.
+  3. **Candidate Name** (ascending) — alphabetical order for stable presentation.
+  4. **Candidate ID** (ascending) — absolute unique tie-breaker.
+- **Input Immutability**: All operations preserve original candidate objects and skill arrays without mutation.
+- **Two Implementations**:
+  1. `rankCandidatesBaseline`: Direct mapping and full array sort $O(N \log N)$.
+  2. `rankCandidatesOptimized`: Partitioning into $R + 1$ score buckets (Bucket Sort) where $R$ is the number of distinct required skills ($R \le 30$). Enables $O(N)$ distribution and early-exit top-K pruning ($O(N + K \log K)$) when only top candidates are needed.
+
+#### Complexity Analysis & Trade-Offs
+
+| Implementation | Time Complexity (Full) | Time Complexity (Top-K) | Space Complexity | Practical Trade-Off |
+| :--- | :--- | :--- | :--- | :--- |
+| **Baseline** | $O(N \cdot S_c + N \log N)$ | $O(N \cdot S_c + N \log N)$ | $O(N)$ | Simpler to read, but wastes CPU cycles sorting tens of thousands of zero-match candidates. |
+| **Optimized Bucket Sort** | $O(N \cdot S_c + \sum B_i \log B_i)$ | $O(N \cdot S_c + K \log K)$ | $O(N)$ | Highly efficient for real-world recruiting where $R \ll N$. Employs early exit to only sort the highest scoring buckets. |
+
+---
+
+### Task 2b: AI Code Review & Bug Fix
+
+Located in `backend/src/algorithms/matchCandidatesFixed.ts`:
+
+#### Bugs & Design Smells in Original AI Snippet
+
+```typescript
+// Original buggy snippet from prompt
+function matchCandidates(candidates, requiredSkills) {
+  let matches = [];
+  for (i = 0; i <= candidates.length; i++) {
+    const c = candidates[i];
+    const score = c.skills.filter(s => requiredSkills.includes(s));
+    if (score.length > 0) {
+      matches.push({ name: c.name, score: score });
+    }
+  }
+  return matches.sort((a, b) => a.score - b.score);
+}
+```
+
+1. **Undeclared Loop Variable (`i`)**: Missing `let`/`const`, leaking `i` to global scope (or throwing `ReferenceError` in strict mode).
+2. **Off-by-One Array Boundary (`i <= candidates.length`)**: Causes `candidates[candidates.length]` to evaluate to `undefined`, immediately crashing on the final iteration with `TypeError: Cannot read properties of undefined (reading 'skills')`.
+3. **Array Stored as Score**: `c.skills.filter(...)` returns `string[]`. The object pushes `{ name, score: [...] }`, so `score` is an array of strings rather than a number.
+4. **Invalid Sort Comparator (`a.score - b.score`)**: Array subtraction `[...array] - [...array]` evaluates to `NaN` in JavaScript, producing broken and non-deterministic ordering. Furthermore, numeric `a - b` sorts ascending (worst matches first), whereas recruiters require descending order (best matches first).
+5. **Duplicate Skill Inflation**: If a candidate lists `['React', 'React']`, both match, inflating the match count.
+6. **Case Sensitivity & Whitespace**: `requiredSkills.includes(s)` fails to match `'react'` with `'React'`.
+7. **Missing Null/Undefined Checks**: Crashes if `c.skills`, `candidates`, or `requiredSkills` is null or undefined.
+8. **No Deterministic Tie-Breaking**: Candidates with identical scores had arbitrary ordering.
+
+#### 3–4 Sentence Review Reflection
+> "The original function suffered from critical runtime errors: an undeclared loop variable `i` polluted the global scope, while the off-by-one condition `i <= candidates.length` caused a fatal `TypeError` crash on the final iteration. Functionally, assigning the filtered skill array to `score` caused array subtraction in the comparator to evaluate to `NaN`, corrupting the sort order while ignoring case normalization and duplicate skill inflation. The corrected implementation enforces strict TypeScript typing, normalizes skills case-insensitively, computes a distinct numeric match count, and guarantees deterministic descending ranking with alphabetical tie-breaking."
+
+---
+
+### Realistic 100,000 Candidate Benchmark
+
+To verify scale requirements empirically, a reproducible benchmark generates 100,000 synthetic candidates using the **Mulberry32 PRNG** (fixed seed `20261019`):
+
+- **Dataset**: 100,000 candidates, 60 unique skills in pool, 8 required skills, 4–12 skills per candidate.
+- **Environment**: Node.js `v22.22.2`, Windows x64.
+- **Timing**: High-resolution `performance.now()`, 2 warm-up runs, 5 measured iterations.
+
+#### Measured Results (Actual Run)
+
+| Algorithm Variant | Mean Latency | Median Latency | Throughput | Speedup vs Baseline |
+| :--- | :--- | :--- | :--- | :--- |
+| **Baseline (Full Array Sort)** | **266.69 ms** | 260.75 ms | 374,963 cand/sec | 1.00x (Ref) |
+| **Optimized Bucket Sort (Full Rank)** | **252.35 ms** | 237.90 ms | 396,276 cand/sec | 1.06x |
+| **Optimized (Top-100 Early Exit)** | **126.75 ms** | **94.03 ms** | **788,973 cand/sec** | **2.10x – 2.8x** |
+
+Run the benchmark locally:
+```bash
+npm run benchmark
+```
+
+---
+
 ## Prerequisites & Setup
 
 - **Node.js**: `v22.x` or higher (verified on `v22.22.2`)
@@ -225,11 +312,15 @@ All endpoints return JSON and use standard HTTP status codes. Errors follow a co
    ```bash
    npm run test
    ```
-5. **Run Typecheck**:
+5. **Run Benchmark**:
+   ```bash
+   npm run benchmark
+   ```
+6. **Run Typecheck**:
    ```bash
    npm run typecheck
    ```
-6. **Start Development Server**:
+7. **Start Development Server**:
    ```bash
    npm run dev:backend
    ```
