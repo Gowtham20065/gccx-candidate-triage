@@ -4,12 +4,14 @@ import type Database from 'better-sqlite3';
 import { config } from './config';
 import { createCandidateRouter } from './routes/candidateRoutes';
 import { createSkillRouter } from './routes/skillRoutes';
+import { createAiRouter } from './routes/aiRoutes';
+import { GeminiService } from './services/geminiService';
 import { errorHandler } from './middleware/errorHandler';
 
 /**
- * Creates and configures the Express application with dependency-injected database.
+ * Creates and configures the Express application with dependency-injected database and AI service.
  */
-export function createApp(db: Database.Database): Express {
+export function createApp(db: Database.Database, geminiService?: GeminiService): Express {
   const app = express();
 
   // Basic security and parsing middleware
@@ -44,6 +46,7 @@ export function createApp(db: Database.Database): Express {
   // REST API Endpoints
   app.use('/api/candidates', createCandidateRouter(db));
   app.use('/api/skills', createSkillRouter(db));
+  app.use('/api/ai', createAiRouter(db, geminiService));
 
   // Catch-all for undefined routes
   app.use('*', (req: Request, res: Response) => {

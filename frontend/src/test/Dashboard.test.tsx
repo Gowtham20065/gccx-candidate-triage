@@ -4,6 +4,7 @@ import App from '../App';
 import * as api from '../services/api';
 import type {
   Candidate,
+  CandidateFitResult,
   HealthResponse,
   SkillItem,
   TriageStats,
@@ -231,6 +232,78 @@ describe('Candidate Triage Dashboard UI Tests', () => {
     await waitFor(() => {
       expect(screen.getByText(/Failed to connect to backend server/i)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Retry/i })).toBeInTheDocument();
+    });
+  });
+
+  it('triggers AI fit evaluation inside candidate details modal and displays structured result', async () => {
+    const mockFitResult: CandidateFitResult = {
+      candidateId: 'cand_001',
+      candidateName: 'Sameer Rao',
+      targetRole: 'ML Engineer',
+      fitLevel: 'strong',
+      oneLineSummary: 'Sameer has strong infrastructure capabilities in Python and Kubernetes suited for ML platforms.',
+      supportedSkills: ['Python', 'Kubernetes'],
+      missingOrUnverifiedSkills: ['PyTorch'],
+      experienceFit: '6 years matches senior engineering scope.',
+      fitRationale: 'Proven enterprise track record in scalable distributed infrastructure.',
+      uncertaintiesOrRisks: 'Requires clarity on individual project ownership.',
+      disclaimer: 'AI-generated candidate evaluation intended solely as decision support for human recruiters.',
+      generatedAt: '2026-10-19T12:00:00Z',
+      model: 'gemini-3.8-flash',
+    };
+
+    const evalSpy = vi.spyOn(api, 'evaluateCandidateFit').mockResolvedValueOnce(mockFitResult);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Sameer Rao')).toBeInTheDocument();
+    });
+
+    // Open Sameer Rao details modal
+    fireEvent.click(screen.getByText('Sameer Rao'));
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Evaluate Fit with Gemini/i })).toBeInTheDocument();
+    });
+
+    // Click Evaluate Fit with Gemini
+    const evalBtn = screen.getByRole('button', { name: /Evaluate Fit with Gemini/i });
+    fireEvent.click(evalBtn);
+
+    await waitFor(() => {
+      expect(evalSpy).toHaveBeenCalledWith('cand_001', expect.any(String));
+      expect(screen.getByText(/Fit Level: strong/i)).toBeInTheDocument();
+      expect(screen.getByText(/"Sameer has strong infrastructure capabilities in Python and Kubernetes suited for ML platforms."/i)).toBeInTheDocument();
+      expect(screen.getByText(/✓ Python/i)).toBeInTheDocument();
+      expect(screen.getByText(/\? PyTorch/i)).toBeInTheDocument();
+    });
+  });
+
+  it('displays error banner and retry option when AI fit evaluation fails', async () => {
+    vi.spyOn(api, 'evaluateCandidateFit').mockRejectedValueOnce(
+      new Error('Gemini API rate limit exceeded. Please wait a moment before trying again.')
+    );
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Sameer Rao')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Sameer Rao'));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Evaluate Fit with Gemini/i })).toBeInTheDocument();
+    });
+
+    const evalBtn = screen.getByRole('button', { name: /Evaluate Fit with Gemini/i });
+    fireEvent.click(evalBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Evaluation Failed:/i)).toBeInTheDocument();
+      expect(screen.getByText(/Gemini API rate limit exceeded/i)).toBeInTheDocument();
     });
   });
 });

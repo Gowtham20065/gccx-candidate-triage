@@ -1,6 +1,8 @@
 import type {
   Candidate,
   CandidateFilterState,
+  CandidateFitResponse,
+  CandidateFitResult,
   HealthResponse,
   PaginatedCandidatesResponse,
   SkillItem,
@@ -155,4 +157,18 @@ export async function fetchTriageStats(): Promise<TriageStats> {
     shortlisted: shortlistedRes.pagination.total,
     rejected: rejectedRes.pagination.total,
   };
+}
+
+/**
+ * Calls the AI endpoint to evaluate candidate fit against a job description.
+ */
+export async function evaluateCandidateFit(
+  candidateId: string,
+  jobDescription: string
+): Promise<CandidateFitResult> {
+  const res = await request<CandidateFitResponse>('/api/ai/candidate-fit', {
+    method: 'POST',
+    body: JSON.stringify({ candidateId, jobDescription }),
+  });
+  return res.data;
 }

@@ -76,3 +76,25 @@ export interface ApiErrorResponse {
     details?: unknown;
   };
 }
+
+export type FitLevel = 'strong' | 'moderate' | 'weak' | 'unclear';
+
+export interface CandidateFitResult {
+  candidateId: string;
+  candidateName: string;
+  targetRole: string;
+  fitLevel: FitLevel;
+  oneLineSummary: string;
+  supportedSkills: string[];
+  missingOrUnverifiedSkills: string[];
+  experienceFit: string;
+  fitRationale: string;
+  uncertaintiesOrRisks: string;
+  disclaimer: string;
+  generatedAt: string;
+  model: string;
+}
+
+export interface CandidateFitResponse {
+  data: CandidateFitResult;
+}
