@@ -1,7 +1,8 @@
 # GCCX Candidate Triage Platform — Technical Presentation
 
 **Candidate:** AI Full-Stack Engineer Intern Applicant
-**Duration:** 10 Minutes | **Format:** 7 Slides (including Live Demo) with Architecture Diagrams & Speaker Notes
+**Duration:** 10 Minutes | **Format:** 8 Slides with Embedded Live Screenshots, Architecture Diagrams & Speaker Notes
+**PowerPoint Deck:** [`docs/gccx-candidate-triage-presentation.pptx`](file:///c:/Users/gowth/Desktop/gccx/gccx-candidate-triage/docs/gccx-candidate-triage-presentation.pptx)
 
 ---
 
@@ -119,43 +120,60 @@
 
 ---
 
-## Slide 5: Live Demo & Walkthrough (The Recruiter Dashboard)
-*Timing: 5:00 – 7:00 (2 Minutes)*
+## Slide 5: Live Product Walkthrough: Recruiter Operations Dashboard
+*Timing: 5:00 – 6:15 (1.25 Minutes)*
 
 ### On-Slide Content
-- **Live System Walkthrough Guide**:
-  1. **Dashboard & KPIs**: Real-time status counts (`Untriaged`, `Shortlisted`, `Rejected`) and debounced search across candidates.
-  2. **Candidate Drawer**: Inspect candidate experience, sourcing channel, qualitative notes, and normalized skill badges.
-  3. **Immediate Triage Mutation**: Shortlist or reject a candidate — persists immediately via `PATCH /api/candidates/:id/status`.
-  4. **Live Gemini Candidate-Fit Evaluation**:
-     - Select a job description preset (e.g. Senior Backend / ML Engineer).
-     - Trigger `POST /api/ai/candidate-fit` powered by `gemini-3.8-flash`.
-     - Inspect structured output: fit level, supported skills, unverified requirements, and interview probing flags.
-- **Defensive API Architecture**:
-  - XML sanitization fencing (`<job_description>`, `<candidate_profile>`) mitigating prompt injection.
-  - 100% mocked automated tests (65 backend in ~25s, 10 frontend in ~2.8s) covering 429, 503, 422, and 504 errors.
+- **Recruiter Operations Capabilities**:
+  - **Real-Time KPI Cards**: Live aggregate counters (`48 Total`, `Needs Review`, `Shortlisted`, `Archived`) with single-click status filtering.
+  - **Multi-Criteria Filter Bar**: Debounced search across candidate names, notes, roles, and skills; range sliders for experience.
+  - **One-Click Triage Actions**: Instant `Shortlist`, `Reject`, or `Reset` buttons mutating SQLite via `PATCH /api/candidates/:id/status`.
+  - **Optimistic Feedback**: Immediate UI status badge update with animated toast notifications and counter synchronization.
+  - **Accessibility-Conscious**: Full keyboard navigation, semantic table roles, ARIA labels, and high-contrast styling.
 
-### Suggested Visual
-```text
-[ Recruiter Search & Filter ] ──▶ [ Candidate Drawer ] ──▶ [ Live Gemini Candidate-Fit ]
-          │                                 │                               │
-[ Status KPI Cards: 48 Total ]    [ PATCH /status ]            [ Structured JSON Fit Report ]
-```
+### Live UI Screenshots
+- **Main Dashboard View**:
+  ![Recruiter Operations Dashboard](file:///c:/Users/gowth/Desktop/gccx/gccx-candidate-triage/docs/screenshots/01-dashboard-overview.png)
+- **Triage Action Toast & State Mutation**:
+  ![Triage Action Toast](file:///c:/Users/gowth/Desktop/gccx/gccx-candidate-triage/docs/screenshots/04-triage-action-toast.png)
 
 ### Speaker Notes
-> "Now let's switch to the running application for a quick live walkthrough.
-> On the dashboard, we have our 48 candidate records with KPI metric cards, debounced search, and target-role filtering. When I open a candidate's details drawer, we see their normalized skills and notes. Clicking 'Shortlist' or 'Reject' persists their state immediately to SQLite.
-> When we select a job description and click 'Evaluate Candidate Fit', the backend fetches the candidate's verified facts from SQLite, wraps the input in XML tags to mitigate prompt injection, and calls Gemini 3.8 Flash with a strict JSON schema. The result gives the recruiter an evidence-grounded summary, verified skills, and explicit missing gaps to probe during interviews."
+> "Here is the live recruiter operations dashboard in action. At the top, we see real-time status KPI cards displaying 48 total candidates. As recruiters apply filters or search for specific skills, the candidate table updates instantly with debounced queries.
+> When a recruiter clicks 'Shortlist' or 'Reject', the state persists immediately to SQLite via PATCH /api/candidates/:id/status. As seen in the toast screenshot, a green toast confirms 'Candidate Kavya Kaur successfully updated to shortlisted', and the Shortlisted KPI counter increments to 1 without requiring a full page refresh."
 
 ---
 
-## Slide 6: Scaling to 3,000 Candidates/Week (Judgment Note)
-*Timing: 7:00 – 8:30 (1.5 Minutes)*
+## Slide 6: Live AI Evaluation: Evidence-Grounded Gemini Candidate Fit
+*Timing: 6:15 – 7:30 (1.25 Minutes)*
+
+### On-Slide Content
+- **Evidence-Grounded AI Architecture**:
+  - **Zero-Hallucination Retrieval**: Candidate facts, experience, and notes are fetched strictly from SQLite on the server; client cannot spoof profile data.
+  - **Prompt Injection Defense**: XML fencing (`<job_description>`, `<candidate_profile>`) mitigates prompt injection attacks.
+  - **Strict Structured Output**: Enforces JSON schema: Fit Level (`strong`, `moderate`, `weak`, `unclear`), Supported Skills, Missing Gaps, Experience Assessment, and Interview Probing Flags.
+  - **Recruiter Decision Support**: Surfaces concrete evidence gaps (e.g. 'Lacks documented frontend frameworks') for human probing, rather than black-box automated rejections.
+  - **Provider Resilience**: 100% mocked automated tests covering 429 rate limits, 503 auth failures, 422 safety blocks, and 502 malformed outputs.
+
+### Live UI Screenshots
+- **Candidate Details Drawer**:
+  ![Candidate Drawer Profile](file:///c:/Users/gowth/Desktop/gccx/gccx-candidate-triage/docs/screenshots/02-candidate-drawer.png)
+- **Gemini Fit Summary & Gap Analysis**:
+  ![Gemini Fit Evaluation Result](file:///c:/Users/gowth/Desktop/gccx/gccx-candidate-triage/docs/screenshots/03-gemini-fit-evaluation.png)
+
+### Speaker Notes
+> "Here is our single implemented AI feature in the live application. When the recruiter opens a candidate drawer, they select a job description preset—like Frontend Engineer—and trigger 'Evaluate Fit with Gemini'.
+> The backend retrieves verified profile facts directly from SQLite, wraps user inputs in XML fence tags to mitigate prompt injection, and calls gemini-3.8-flash with a structured JSON schema.
+> As shown on screen for Kavya Kaur, Gemini correctly classifies the fit as WEAK. Notice why: although she has 1 year at a startup, her documented skills are backend technologies like Java, Python, and Redis, lacking verified React or TypeScript. Rather than a black-box score, it provides specific interview probing questions for the recruiter."
+
+---
+
+## Slide 7: Scaling to 3,000 Candidates/Week (Judgment Note)
+*Timing: 7:30 – 8:45 (1.25 Minutes)*
 
 ### On-Slide Content
 - **The Challenge**: Scale to a client handling 3,000 candidates/week (~430/day) with 2 engineers in 2 weeks.
 - **The #1 Defensible Risk**:
-  - **Skill Tag Quality & Silent Exclusion**: Resumes have inconsistent terminology ("Postgres" vs "RDBMS", "Node" vs "backend"). A naive pre-filter that uses keyword tag overlap to drop 90% of applicants creates severe false negatives, silently eliminating strong non-traditional candidates.
+  - **Skill Tag Quality & Silent Exclusion**: Resumes have inconsistent terminology ('Postgres' vs 'RDBMS', 'Node' vs 'backend'). A naive pre-filter that uses keyword tag overlap to drop 90% of applicants creates severe false negatives, silently eliminating strong non-traditional candidates.
   - Furthermore, applicants apply across distinct roles; filtering must be scoped **per job requisition on daily intake**, not as a single global pool.
 - **What We Build First (Weeks 1–2 Priority)**:
   1. *Per-Requisition Async Ingestion Queue*: Buffer daily intake (~430/day) via BullMQ/Redis and deduplicate by email/phone.
@@ -180,8 +198,8 @@ Client Launch ◄────────── [ Human Recruiter Sign-Off ] ◄
 
 ---
 
-## Slide 7: What We'd Build Next in a Real Sprint
-*Timing: 8:30 – 10:00 (1.5 Minutes)*
+## Slide 8: What We'd Build Next in a Real Sprint
+*Timing: 8:45 – 10:00 (1.25 Minutes)*
 
 ### On-Slide Content
 - **Production Hardening Roadmap (Next 2-Week Sprint)**:
