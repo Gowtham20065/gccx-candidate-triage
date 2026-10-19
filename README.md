@@ -17,7 +17,7 @@ The application is structured as an npm workspaces monorepo:
 - **Data Layer (`/data`)**:
   - SQLite database (`better-sqlite3`) seeded from `candidates.json` (48 mock records).
   - Normalized 3NF relational schema with foreign key constraints, indexes, and transactions.
-  - Local persistence for triage statuses, recruiter tags, and LLM generated fit notes.
+  - Local persistence for candidate records, normalized skills, and recruiter triage decisions (`status`). LLM candidate-fit evaluations are computed live on demand.
 - **Documentation & Deliverables (`/docs`)**:
   - `ai-collaboration-log.md` (Task 3: AI workflow log)
   - `judgment-note.md` (Task 4: Half-page scaling note)
@@ -341,6 +341,15 @@ To evaluate scaling behavior empirically, a reproducible synthetic benchmark was
 1. **Synthetic vs. Production Performance**: These figures measure raw in-memory algorithmic processing of generated JavaScript candidate objects. They do not represent end-to-end production server response times, which are bounded by network I/O, SQLite disk operations, and HTTP serialization.
 2. **Full Ranking Comparison**: When sorting all 100,000 candidates completely, Bucket Sort performs comparably to the baseline sort (0.97x mean, 1.04x median) because every non-empty score bucket must still be visited and sorted in full with the 4-tier tie-breaking comparator.
 3. **Top-K Early Exit Advantage**: In practical recruiter workflows (such as retrieving the top 100 matches), Bucket Sort halts as soon as 100 candidates are collected from the highest score buckets. It completely skips sorting and traversing the lower-scoring buckets, yielding a measured 2.03x mean (2.59x median) speedup over baseline sorting.
+
+#### Why an Inverted Index Wins for Repeated Queries
+
+In our in-memory prototype, `rankCandidatesOptimized` partitions candidates on-the-fly during each request, requiring an $O(N \cdot S_c)$ pass over all 100,000 candidates.
+
+For a production search service handling repeated queries across an existing candidate corpus, an **Inverted Index** (`Map<skill, candidateId[]>`) is structurally superior:
+- **Zero-Match Exclusion**: Instead of inspecting 100,000 candidates, a search with required skills $R_1, \dots, R_m$ only reads the posting lists for those specific $m$ skills. Candidates with zero matching skills are **never touched or scanned**.
+- **Posting Intersection & Accumulation**: Scores are only accumulated for candidates who appear in at least one posting list ($\bigcup_{j=1}^m \text{Postings}(R_j)$).
+- **Complexity**: Query time drops from $O(N \cdot S_c)$ to $O(\sum_{j=1}^m |\text{Postings}(R_j)|)$, which is typically orders of magnitude smaller than $N$, with index construction amortized at candidate ingestion time.
 
 Run the benchmark locally:
 ```bash

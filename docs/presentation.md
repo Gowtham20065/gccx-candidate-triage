@@ -1,35 +1,35 @@
 # GCCX Candidate Triage Platform — Technical Presentation
 
 **Candidate:** AI Full-Stack Engineer Intern Applicant
-**Duration:** 10 Minutes | **Format:** 8 Slides with Architecture Diagrams & Speaker Notes
+**Duration:** 10 Minutes | **Format:** 7 Slides (including Live Demo) with Architecture Diagrams & Speaker Notes
 
 ---
 
-## Slide 1: The Problem, Brief & Key Assumptions
+## Slide 1: The Problem, Context & Core Assumptions
 *Timing: 0:00 – 1:00 (1 Minute)*
 
 ### On-Slide Content
-- **The Core Problem**: Recruiters manage hundreds of applicants across static spreadsheets with gut-feel evaluation, slow screening cycles, and zero audit trails.
-- **The Mandate**: Deliver a Candidate Triage prototype tool:
+- **The Core Problem**: Recruiters triage hundreds of candidates across static spreadsheets with gut feel, slow screening cycles, and no persistent decision tracking.
+- **The Mandate**: Deliver a functional candidate triage prototype:
   - Responsive recruiter dashboard with search, filtering, and triage status tracking.
   - Normalized SQLite persistence with non-destructive seeding.
-  - Exactly **one** high-value AI-powered feature calling a live LLM model.
-  - Algorithmic ranking capable of scaling to 100,000+ candidates.
+  - Exactly **one** high-value AI feature calling a live LLM model.
+  - Algorithmic candidate ranking evaluated at scale.
 - **Key Assumptions Made**:
-  - *Status Model*: Defined standard triage lifecycle (`untriaged` $\rightarrow$ `shortlisted` or `rejected`).
-  - *Data Integrity*: Biographical seed updates must never overwrite recruiter triage decisions.
-  - *AI Scope*: Evidence-grounded candidate-fit evaluation against recruiter job descriptions delivers higher triage leverage than raw semantic vector search on 48 candidates.
+  - *Triage Lifecycle*: Defined standard statuses (`untriaged` $\rightarrow$ `shortlisted` or `rejected`).
+  - *Data Integrity*: Re-seeding database from JSON must never overwrite existing recruiter triage decisions.
+  - *Targeted AI Value*: Evidence-grounded candidate-fit evaluation against recruiter job descriptions delivers higher triage value than generic semantic search over 48 mock candidates.
 
 ### Suggested Visual
 ```text
-[ Raw Spreadsheets / Gut Feel ] ───▶ [ GCCX Triage Platform ] ───▶ [ In-Memory Ranking ]
-                                                               └───▶ [ Grounded Gemini Fit ]
-                                                               └───▶ [ Persistent Triage Decisions ]
+[ Spreadsheets & Gut Feel ] ──▶ [ GCCX Candidate Triage ] ──▶ [ Fast In-Memory Ranking ]
+                                                          └──▶ [ Grounded Gemini Fit ]
+                                                          └──▶ [ Persistent Triage Decisions ]
 ```
 
 ### Speaker Notes
-> "Welcome everyone. The core scenario in this case study is recruitment triage at speed. Today, recruiters drown in spreadsheets, relying on gut feel to screen applicants. Our mission was to build a functional candidate triage prototype that combines deterministic ranking with grounded AI decision support.
-> Ambiguity was intentional in the brief, so we made two foundational architectural calls upfront: first, recruit triage state must persist non-destructively across server reseeds; second, the single AI feature should directly solve the recruiter's hardest problem—evaluating applicant qualifications against a specific job description with verifiable evidence and explicit gap analysis."
+> "Welcome everyone. Recruiters today triage hundreds of applicants using spreadsheets and gut feel. Our goal was to build a functional candidate triage prototype combining fast in-memory ranking with evidence-grounded AI decision support.
+> We made two foundational architectural decisions upfront: first, recruiter triage decisions must persist non-destructively across server restarts; second, the single AI feature should directly solve the recruiter's hardest problem—evaluating applicant qualifications against a specific job description with verifiable evidence and explicit gap analysis."
 
 ---
 
@@ -38,13 +38,13 @@
 
 ### On-Slide Content
 - **TypeScript Monorepo**: Structured via npm workspaces (`backend/` and `frontend/`).
-- **Backend**: Express + Node.js 22 + `better-sqlite3` with strict request validation and error envelopes.
-- **Frontend**: React 18 + Vite + accessibility-conscious design system with debounced filtering and slide-out details drawer.
+- **Backend**: Express + Node.js 22 + `better-sqlite3` with strict request validation and consistent error envelopes.
+- **Frontend**: React 18 + Vite + accessibility-conscious design system with debounced filtering and a slide-out details drawer.
 - **Data Layer (3NF Normalized)**:
-  - `candidates`: Core biographical records and triage status.
+  - `candidates`: Core biographical records and persistent triage status.
   - `skills`: Normalized skill dictionary (`NOCASE` unique constraint).
   - `candidate_skills`: Many-to-many junction table with cascade deletion.
-  - Performance indexes on `status`, `target_role`, `source`, `years_experience`, and `applied_date`.
+  - B-tree indexes on `status`, `target_role`, `source`, `years_experience`, and `applied_date`.
 
 ### Suggested Visual
 ```text
@@ -57,44 +57,41 @@
 ```
 
 ### Speaker Notes
-> "Let's examine the system architecture. Rather than treating SQLite as a flat JSON dump, we modeled a normalized Third Normal Form schema with a dedicated skills dictionary and foreign-key junction table. This gives us fast, B-tree indexed queries and prevents duplicate skill inflation.
-> Our seed script is completely idempotent: it updates candidate records on conflict but deliberately omits the triage status column, preserving recruiter decisions across restarts.
-> On the frontend, we built an accessible single-page dashboard featuring debounced multi-criteria search, KPI filter cards, quick status mutations, and a slide-out candidate details drawer."
+> "Let's examine the system architecture. Rather than treating SQLite as a flat JSON store, we modeled a normalized Third Normal Form schema with a dedicated skills dictionary and foreign-key junction table. This gives us clean relational integrity, eliminates duplicate skills, and provides fast indexed lookups.
+> Our seed script is idempotent: it updates biographical records on conflict but deliberately omits the triage status column, preserving recruiter decisions across restarts.
+> On the frontend, we built an accessible single-page dashboard featuring debounced search, status KPI cards, quick triage mutations, and an evaluation drawer."
 
 ---
 
-## Slide 3: Task 2a — Candidate Ranking at Scale (100,000+ Records)
+## Slide 3: Ranking at Scale: Bucket Sort vs. Inverted Index
 *Timing: 2:30 – 4:00 (1.5 Minutes)*
 
 ### On-Slide Content
-- **Problem**: Rank candidates by distinct required skill matches for 100,000+ applicants under strict latency limits.
+- **Problem**: Rank 100,000 candidates by distinct required skill overlap with deterministic tie-breaking.
 - **Algorithm Design**:
-  - Distinct skill set overlap: Duplicates in candidate profile or query never inflate scores.
-  - Case-insensitive trimming (`React` == ` react `).
-  - Four-tier deterministic tie-breaking: `Score (desc)` $\rightarrow$ `Experience (desc)` $\rightarrow$ `Name (asc)` $\rightarrow$ `ID (asc)`.
-- **Complexity & Optimization (Bucket Sort)**:
-  - Partitioning across $R + 1$ buckets: Time $O(N \cdot S_c)$, Space $O(N)$ (where $S_c \ll N$ is candidate skill count).
-  - Bucket Sorting: Visited buckets are sorted in full with the tie-breaker ($O(\sum_{s \in \text{visited}} B_s \log B_s)$); worst case remains $O(N \log N)$ if candidates cluster in the top score bucket.
-  - Practical Benefit: Top-K early exit skips sorting and inspecting lower-scoring buckets once $K$ candidates are collected.
-- **Newly Measured Synthetic Benchmark (100,000 Candidates, Node v22, Windows x64)**:
-  - Baseline Full Array Sort: **272.73 ms** mean / **265.00 ms** median (~366,667 cand/sec).
-  - Optimized Full Ranking: **279.97 ms** mean / **253.88 ms** median (~357,182 cand/sec, 1.04x median speedup).
-  - **Optimized Top-100 Early Exit: 134.23 ms mean / 102.18 ms median (745,003 cand/sec) — 2.03x mean / 2.59x median speedup**.
-  - *(Note: Synthetic in-memory benchmark measurements on generated objects, not production server response times).*
+  - Distinct skill set matching: Duplicate candidate or query skills never inflate scores.
+  - 4-tier tie-breaking: `Score (desc)` $\rightarrow$ `Experience (desc)` $\rightarrow$ `Name (asc)` $\rightarrow$ `ID (asc)`.
+- **Honest Benchmark Numbers (100,000 Synthetic Candidates, Node v22, Windows x64)**:
+  - Baseline Full Array Sort: **265.00 ms** median (272.73 ms mean) — $O(N \cdot S_c + N \log N)$.
+  - Bucket Sort Full Rank: **253.88 ms** median (279.97 ms mean) — **~1x** (no speedup over baseline sort because all non-empty buckets must still be sorted in full).
+  - **Bucket Sort Top-100 Early Exit: 102.18 ms median (134.23 ms mean) — ~2x speedup (2.03x mean, 2.59x median)** because it stops once 100 candidates are found, skipping lower score buckets.
+- **Architectural Next Step (Inverted Index)**:
+  - For repeated queries over an existing corpus, an **Inverted Index** (`Map<skill, candidateId[]>`) is structurally superior: candidates with zero matching skills are never touched, dropping query time to $O(\sum |\text{Postings}(R_j)|)$.
 
 ### Suggested Visual
 ```text
-100,000 Candidates ──▶ [ Distinct Skill Match ] ──▶ [ Partition into Buckets 0..R ]
-                                                              │
-Top-100 Early Exit ◄── [ Quick Sort Top Buckets Only ] ◄──────┘ (Skips zero-match candidates)
+100,000 Candidates ──▶ [ Score Partitioning 0..R ] ──▶ [ Gather Top Buckets Only ] ──▶ Top-100 Early Exit (102 ms)
+                                                                                        (Skips zero-match candidates)
 ```
 
 ### Speaker Notes
-> "In Task 2a, we tackled ranking candidates at scale. The baseline sorts all 100,000 candidates with an O(N log N) comparator. Our Bucket Sort partitions candidates in linear time based on skill count. While each visited bucket is still sorted in full with the tie-breaker, early exit halts after gathering 100 candidates and skips sorting lower buckets. In our synthetic in-memory benchmark on 100,000 synthetic candidates, this reduced median latency to 102 ms, achieving a 2.03x mean and 2.59x median speedup over baseline sorting."
+> "In Task 2a, we tackled ranking candidates at scale. The naive baseline sorts all 100,000 candidates with an O(N log N) comparator. Our Bucket Sort partitions candidates by distinct skill matches in linear time.
+> Here are the honest benchmark numbers: if you sort all 100,000 candidates, Bucket Sort gives about 1x—virtually no speedup over baseline sorting—because every non-empty bucket still has to be sorted with the tie-breaker. But for Top-K queries where a recruiter only needs the top 100 matches, early exit skips sorting lower buckets entirely, giving a real ~2x speedup.
+> If we were building this for repeated production queries, we would implement an Inverted Index, which skips candidates with zero matches without even an O(N) scan."
 
 ---
 
-## Slide 4: Task 2b — AI Code Review, Bug Resolution & Reflection
+## Slide 4: Task 2b — AI Code Review & Reflection
 *Timing: 4:00 – 5:00 (1 Minute)*
 
 ### On-Slide Content
@@ -122,127 +119,89 @@ Top-100 Early Exit ◄── [ Quick Sort Top Buckets Only ] ◄─────�
 
 ---
 
-## Slide 5: Task 1 AI Feature — Grounded Fit Summaries with Gemini
-*Timing: 5:00 – 6:30 (1.5 Minutes)*
+## Slide 5: Live Demo & Walkthrough (The Recruiter Dashboard)
+*Timing: 5:00 – 7:00 (2 Minutes)*
 
 ### On-Slide Content
-- **Live Integration (`@google/genai` + `gemini-3.8-flash`)**:
-  - Reuses canonical `LLM_PROVIDER`, `LLM_API_KEY`, and `LLM_MODEL` environment variables.
-  - Verified against current Google Gemini documentation.
-- **Grounded Fact Pipeline**:
-  - Candidate details fetched directly from SQLite via `getCandidateById`. Client attributes are ignored.
-  - Recruiter Job Description and candidate notes are XML-escaped and fenced (`<job_description>`, `<candidate_profile>`) to mitigate prompt injection risks.
-- **Structured JSON Schema**:
-  - Generates typed fields: `fit_level` (`strong`/`moderate`/`weak`/`unclear`), `one_line_summary`, `supported_skills`, `missing_or_unverified_skills`, `experience_fit`, `fit_rationale`, and `uncertainties_or_risks`.
-- **Ethical Safeguards & Human Decision Support**:
-  - System instructions strictly ban protected demographic evaluations.
-  - Every output includes an explicit advisory disclaimer: AI supports human recruiters; it does not make automated hiring decisions.
+- **Live System Walkthrough Guide**:
+  1. **Dashboard & KPIs**: Real-time status counts (`Untriaged`, `Shortlisted`, `Rejected`) and debounced search across candidates.
+  2. **Candidate Drawer**: Inspect candidate experience, sourcing channel, qualitative notes, and normalized skill badges.
+  3. **Immediate Triage Mutation**: Shortlist or reject a candidate — persists immediately via `PATCH /api/candidates/:id/status`.
+  4. **Live Gemini Candidate-Fit Evaluation**:
+     - Select a job description preset (e.g. Senior Backend / ML Engineer).
+     - Trigger `POST /api/ai/candidate-fit` powered by `gemini-3.8-flash`.
+     - Inspect structured output: fit level, supported skills, unverified requirements, and interview probing flags.
+- **Defensive API Architecture**:
+  - XML sanitization fencing (`<job_description>`, `<candidate_profile>`) mitigating prompt injection.
+  - 100% mocked automated tests (60 backend in ~25s, 10 frontend in ~2.8s) covering 429, 503, 422, and 504 errors.
 
 ### Suggested Visual
 ```text
-Recruiter JD ──▶ [ XML Sanitizer ] ──┐
-                                     ├──▶ [ gemini-3.8-flash ] ──▶ [ Structured Fit Result ]
-SQLite Facts ──▶ [ Server Lookup ] ──┘    (Low Temp 0.2)           - Fit Level: Strong
-                                                                   - Supported vs Missing
-                                                                   - Interview Flags
+[ Recruiter Search & Filter ] ──▶ [ Candidate Drawer ] ──▶ [ Live Gemini Candidate-Fit ]
+          │                                 │                               │
+[ Status KPI Cards: 48 Total ]    [ PATCH /status ]            [ Structured JSON Fit Report ]
 ```
 
 ### Speaker Notes
-> "For Task 1's AI feature, we built an evidence-grounded candidate fit summary and gap analysis tool powered by Google Gemini 3.8 Flash.
-> Crucially, this feature never trusts client-supplied candidate data: the backend fetches candidate facts strictly from SQLite. We sanitize both the job description and recruiter notes with XML delimiters to mitigate prompt injection risks.
-> Using Gemini's native structured schema output, the model returns a concise one-line summary, an explicit list of supported skills, a breakdown of missing or unverified requirements, and interview probing flags based on recruiter notes.
-> All responses carry an ethical safeguard: demographic attributes are strictly excluded, and output is explicitly framed as human decision support."
+> "Now let's switch to the running application for a quick live walkthrough.
+> On the dashboard, we have our 48 candidate records with KPI metric cards, debounced search, and target-role filtering. When I open a candidate's details drawer, we see their normalized skills and notes. Clicking 'Shortlist' or 'Reject' persists their state immediately to SQLite.
+> When we select a job description and click 'Evaluate Candidate Fit', the backend fetches the candidate's verified facts from SQLite, wraps the input in XML tags to mitigate prompt injection, and calls Gemini 3.8 Flash with a strict JSON schema. The result gives the recruiter an evidence-grounded summary, verified skills, and explicit missing gaps to probe during interviews."
 
 ---
 
-## Slide 6: Testing Rigor & The AI Collaboration Workflow
-*Timing: 6:30 – 8:00 (1.5 Minutes)*
+## Slide 6: Scaling to 3,000 Candidates/Week (Judgment Note)
+*Timing: 7:00 – 8:30 (1.5 Minutes)*
 
 ### On-Slide Content
-- **Total Test Suite: 70 Tests Passing, 0 Failures**:
-  - Backend (`node:test`): 60 tests (~25s total duration across 11 suites with in-memory SQLite instances).
-  - Frontend (`vitest`): 10 tests (~2.7s duration covering dashboard UI, filtering, mutations, and AI drawer).
-- **100% Deterministic Mocked Automated Tests**:
-  - Zero external network dependencies, zero API key requirements, and zero token expense.
-  - Simulates rate limits (`429`), auth errors (`503`), safety blocks (`422`), timeouts (`504`), and invalid JSON (`502`).
-- **Distinction from Manual Live Verification**:
-  - A manual live check was executed during development with a valid API key against real candidate `cand_001` (Sameer Rao) to confirm live model schema adherence.
-  - No live credentials or smoke-test scripts are included in the repository; all repository test suites run 100% mocked.
-- **Dataset Integrity**:
-  - Official `data/candidates.json` verified byte-for-byte identical (`SHA-256: 2B68CD53...`).
+- **The Challenge**: Scale to a client handling 3,000 candidates/week (~430/day) with 2 engineers in 2 weeks.
+- **The #1 Defensible Risk**:
+  - **Skill Tag Quality & Silent Exclusion**: Resumes have inconsistent terminology ("Postgres" vs "RDBMS", "Node" vs "backend"). A naive pre-filter that uses keyword tag overlap to drop 90% of applicants creates severe false negatives, silently eliminating strong non-traditional candidates.
+  - Furthermore, applicants apply across distinct roles; filtering must be scoped **per job requisition on daily intake**, not as a single global pool.
+- **What We Build First (Weeks 1–2 Priority)**:
+  1. *Per-Requisition Async Ingestion Queue*: Buffer daily intake (~430/day) via BullMQ/Redis and deduplicate by email/phone.
+  2. *Recruiter-Selected Triage*: Present ranked candidates per open role; allow recruiters to select candidate batches for LLM evaluation rather than an automated top-10% cutoff.
+  3. *Evaluation Caching & Resilience*: Cache fit evaluations by `SHA256(candidate_id + jd_hash)` with provider rate-limit retries.
+  4. *Bulk Actions & Audit Trail*: Multi-candidate status mutations and an append-only triage audit log.
+- **What We Explicitly Defer**:
+  - Fully automated rejection/hiring decisions (regulatory risk under EEOC, Title VII, NYC Local Law 144).
+  - Custom resume PDF OCR and heavy vector database clusters.
 
 ### Suggested Visual
 ```text
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                        70 Automated Tests Passing (0 Failures)                         │
-├───────────────────────────────┬───────────────────────────────┬────────────────────────┤
-│ Backend API & DB (29 tests)   │ Algorithmic Ranking (20 tests)│ AI & Frontend (21 tests)│
-│ - REST Endpoints: 23 passed   │ - Bucket Sort: 11 passed      │ - AI Routes Mock: 11   │
-│ - SQLite 3NF Schema: 6 passed │ - Bug Fix Review: 9 passed    │ - React Dashboard: 10  │
-└───────────────────────────────┴───────────────────────────────┴────────────────────────┘
+3,000 Daily Applicants ──▶ [ Per-Requisition Queue ] ──▶ [ Recruiter Batch Select ] ──▶ [ Cached Gemini Fit ]
+                                                                                               │
+Client Launch ◄────────── [ Human Recruiter Sign-Off ] ◄───────────────────────────────────────┘
 ```
 
 ### Speaker Notes
-> "Engineering quality requires verification. Across the entire monorepo, we authored 70 automated tests—60 on the backend and 10 on the frontend.
-> Every single automated test runs with 100% determinism using mocked Gemini clients, with execution taking ~25 seconds on the backend (across 60 tests and 11 suites with isolated in-memory SQLite instances) and ~2.7 seconds on the frontend (10 Vitest tests). We exhaustively tested failure paths including rate limits, authentication errors, safety blocks, and network timeouts.
-> Separately, a manual live check was run during development to confirm end-to-end integration with the real Gemini API. Finally, we verified that the original candidates.json dataset remains completely untouched with identical SHA-256 hashes."
+> "In Task 4, leadership asked how to scale this to 3,000 candidates a week with 2 engineers in 2 weeks. Our judgment starts by identifying the fatal flaw of a naive approach:
+> If you use a raw keyword tag pre-filter to drop 90% of applicants, you will silently reject qualified candidates because resumes have varied terminology like 'Postgres' versus 'RDBMS'. Furthermore, 3,000 applicants apply across dozens of different job orders, arriving continuously at 430 a day.
+> So instead of an automated global top-10% cutoff, we build an asynchronous ingestion queue per requisition, and let recruiters manually select batches of candidates to evaluate with Gemini. Combined with hashed caching in Redis and bulk audit logs, this gives recruiters speed without biased auto-rejections."
 
 ---
 
-## Slide 7: Task 4 — Scaling to 3,000 Candidates/Week
-*Timing: 8:00 – 9:00 (1 Minute)*
+## Slide 7: What We'd Build Next in a Real Sprint
+*Timing: 8:30 – 10:00 (1.5 Minutes)*
 
 ### On-Slide Content
-- **The Challenge**: Roll out to a client processing 3,000 candidates/week (~430/day) with 2 engineers in 2 weeks.
-- **What We Build First (Week 1–2 Priority)**:
-  - Asynchronous batch worker queue (BullMQ/Redis) for spike absorption (Proposed).
-  - Two-tier screening pipeline (Proposed): Bucket Sort reduces 3,000 candidates to the top 10% (300) before calling the LLM, slashing API costs by ~90%.
-  - Hashed caching (`SHA256(cand_id + jd_hash)`) to eliminate duplicate LLM inference (Proposed).
-  - Recruiter bulk triage actions and immutable compliance audit logs (Proposed).
-- **What We Explicitly Refuse to Build Yet**:
-  - Fully automated rejection/hiring decisions (mitigating compliance risks under EEOC, Title VII, and NYC Local Law 144).
-  - Custom resume PDF OCR parsing (require structured ATS webhooks instead).
-  - Distributed vector database infrastructure (premature for 3,000 candidates/week).
-- **#1 Management Risk**:
-  - *Algorithmic Bias & Reliance Liability*: Recruiters treating AI as objective truth rather than decision support.
+- **Production Hardening Roadmap (Next 2-Week Sprint)**:
+  1. *Inverted Index & Vector Search*: Build an in-memory inverted skill index for repeated queries, and integrate local `sqlite-vss` embeddings over recruiter notes.
+  2. *Two-Way ATS Sync*: Webhook integrations with Greenhouse and Lever for automated candidate imports and two-way status export.
+  3. *Persistent Evaluation Store*: Create an `evaluations` table in SQLite to persist LLM fit summaries and track recruiter agreement rates over time.
+  4. *Recruiter Collaboration*: Shared candidate shortlists, recruiter comments, and role-based permissions.
+- **Summary**: A disciplined, high-performance foundation built under tight time constraints, fully tested (70 passing tests), and designed for progressive scaling.
 
 ### Suggested Visual
 ```text
-3,000 Applicants ──▶ [ Async Intake Queue ] ──▶ [ Bucket Sort (102ms) ] ──▶ Top 10% (300)
-                                                                                  │
-Client Launch ◄── [ Human Recruiter Sign-off ] ◄── [ Cached Gemini Fit (300) ] ◄──┘
-```
-
-### Speaker Notes
-> "In Task 4, leadership asked how to scale this to 3,000 candidates a week with 2 engineers in 2 weeks. Our judgment centers on ruthless prioritization.
-> What we build first: an asynchronous worker queue to absorb ingestion bursts, and a two-tier screening pipeline. We run our bucket sort algorithm across all 3,000 candidates to identify the top 10%, and only invoke Gemini on those 300 finalists. Combined with hashed caching, this cuts LLM latency and costs by 90%.
-> What we explicitly refuse to build: automated rejections without human sign-off, which introduces severe legal liability under hiring regulations; and complex vector databases, which are completely unnecessary at 3,000 candidates a week.
-> The number one risk we flag to management is recruiter over-reliance on AI summaries, which we mitigate with mandatory human sign-off."
-
----
-
-## Slide 8: What We'd Build Next in a Real Sprint
-*Timing: 9:00 – 10:00 (1 Minute)*
-
-### On-Slide Content
-- **Sprint Goal**: Production hardening for enterprise recruitment operations.
-- **Deliverables for Next 2-Week Sprint**:
-  1. *ATS Webhook Ingestion*: Two-way sync with Greenhouse and Lever for automatic candidate imports and triage status export.
-  2. *Vector Search Module*: Local SQLite vector indexing (`sqlite-vss`) using `text-embedding-004` embeddings for semantic similarity search over recruiter notes.
-  3. *Recruiter Collaboration*: Shared search collections, recruiter comments, and role-based permissions.
-  4. *Observability & Telemetry*: OpenTelemetry tracing on Gemini latency, cache hit ratios, and recruiter agreement rates with AI recommendations.
-- **Summary**: A disciplined, high-performance foundation built under tight time constraints, fully tested, and ready for progressive scaling.
-
-### Suggested Visual
-```text
-[ Current Foundation: Fast Ranking + Grounded Fit ]
+[ Current Foundation: SQLite + Fast Ranking + Live Gemini ]
                        │
+                       ├──▶ [ Inverted Index & SQLite-VSS Vector Search ]
                        ├──▶ [ Two-Way ATS Sync (Greenhouse/Lever) ]
-                       ├──▶ [ SQLite-VSS Embedding Search ]
-                       └──▶ [ Recruiter Observability & Audit Dashboards ]
+                       ├──▶ [ Persistent Evaluations & Agreement Tracking ]
+                       └──▶ [ Recruiter Collaboration & Audit Trails ]
 ```
 
 ### Speaker Notes
-> "To conclude, if given a full two-week sprint, we would transition this prototype into a multi-tenant enterprise service. We would introduce two-way ATS sync with Greenhouse and Lever, integrate local SQLite-VSS vector search over recruiter notes, add team collaboration tools, and deploy telemetry to monitor AI latency and recruiter agreement rates.
-> We delivered a complete TypeScript monorepo, 70 passing tests, in-memory bucket sorting, an accessible React dashboard, and a grounded Gemini integration—achieved with disciplined scope and verified code.
-> Thank you, and I look forward to your questions and walking through the codebase."
+> "To conclude, if given a full two-week sprint, we would transition this prototype into a multi-tenant enterprise service. We would introduce an inverted index and local SQLite-VSS vector search, build two-way ATS sync with Greenhouse and Lever, persist LLM fit summaries in an evaluations table to track recruiter agreement rates, and add team collaboration tools.
+> We delivered a complete TypeScript monorepo, 70 passing tests, honest benchmark data, an accessible React dashboard, and a grounded Gemini integration—achieved with disciplined scope and defensible code.
+> Thank you, and I look forward to walking through the codebase and answering your questions."
